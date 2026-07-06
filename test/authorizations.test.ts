@@ -7,6 +7,7 @@ import { createFreeze } from "../src/services/freezes.js";
 import {
   approveAuthorization,
   consumeAuthorization,
+  listAuthorizations,
   rejectAuthorization,
   requestAuthorization,
   verifyAuthorization,
@@ -141,6 +142,26 @@ describe("authorizations: approval tiers + segregation of duties", () => {
     const auth = requestAuthorization(db, { entity_id: e, requestor_id: "a", amount: 60_000, currency: "USD", counterparty_id: "cp-1" }, SYS) as Authorization;
     const rejected = rejectAuthorization(db, { entity_id: e, id: auth.id, approver_id: "b", reason: "no" }, SYS) as Authorization;
     expect(rejected.status).toBe("rejected");
+  });
+});
+
+describe("authorizations: list order", () => {
+  it("sorts by stable visible fields, not volatile ids or timestamps", () => {
+    const db = memoryDb();
+    const e = entity();
+    createPolicy(db, { entity_id: e, window: "day", amount_limit: 1_000_000, currency: "USD" }, SYS);
+    allowCounterparty(db, { entity_id: e, counterparty_id: "cp-1" }, SYS);
+    createApprovalRule(db, { entity_id: e, tier: "high", threshold_amount: 50_000, currency: "USD", required_approvals: 1 }, SYS);
+    requestAuthorization(db, { entity_id: e, requestor_id: "agent-a", amount: 70_000, currency: "USD", counterparty_id: "cp-1" }, SYS);
+    requestAuthorization(db, { entity_id: e, requestor_id: "agent-a", amount: 10_000, currency: "USD", counterparty_id: "cp-1" }, SYS);
+    requestAuthorization(db, { entity_id: e, requestor_id: "agent-a", amount: 60_000, currency: "USD", counterparty_id: "cp-1" }, SYS);
+    db.run("UPDATE authorizations SET created_at = '2026-07-06T00:00:00.000Z', updated_at = '2026-07-06T00:00:00.000Z'");
+
+    expect(listAuthorizations(db, { entity_id: e }, SYS).map((a) => `${a.status}:${a.amount}`)).toEqual([
+      "approved:10000",
+      "pending:60000",
+      "pending:70000",
+    ]);
   });
 });
 

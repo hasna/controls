@@ -60,6 +60,28 @@ function mapRow(row: AuthRow): Authorization {
   };
 }
 
+function compareVisibleAuthorizationFields(left: Authorization, right: Authorization): number {
+  const fields = [
+    "status",
+    "requestor_id",
+    "amount",
+    "currency",
+    "counterparty_id",
+    "counterparty_name",
+    "required_approvals",
+    "reason",
+  ] as const;
+  for (const field of fields) {
+    const a = left[field] ?? "";
+    const b = right[field] ?? "";
+    if (a < b) return -1;
+    if (a > b) return 1;
+  }
+  const approvals = JSON.stringify(left.approvals).localeCompare(JSON.stringify(right.approvals));
+  if (approvals !== 0) return approvals;
+  return left.id.localeCompare(right.id);
+}
+
 /** Lazily flip an approved/pending authorization to expired once past its TTL. */
 function applyExpiry(db: Database, row: AuthRow): AuthRow {
   if ((row.status === "pending" || row.status === "approved") && Date.parse(row.expires_at) <= Date.now()) {
@@ -271,7 +293,7 @@ export function listAuthorizations(db: Database, input: Input, ctx?: Authorizati
       ? db.query("SELECT * FROM authorizations WHERE entity_id = ? AND status = ? ORDER BY created_at, id").all(entity_id, status)
       : db.query("SELECT * FROM authorizations WHERE entity_id = ? ORDER BY created_at, id").all(entity_id)
   ) as AuthRow[];
-  return rows.map((r) => mapRow(applyExpiry(db, r)));
+  return rows.map((r) => mapRow(applyExpiry(db, r))).sort(compareVisibleAuthorizationFields);
 }
 
 export interface AuthorizationVerification {

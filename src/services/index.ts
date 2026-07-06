@@ -1,6 +1,7 @@
 export * from "./authorization.js";
 export * from "./common.js";
 export * from "./token.js";
+export * from "./money-movement-contract.js";
 export * from "./policies.js";
 export * from "./allowlists.js";
 export * from "./approval-rules.js";
