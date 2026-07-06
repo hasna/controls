@@ -32,6 +32,25 @@ SoD, and exposes the enforcement contract (`authorization.verify`) that
 `iapp-wallets` / `iapp-payments` adopt. Making those upstream movers *refuse*
 movements without a valid controls token is upstream/gated work.
 
+## Money-Moving App Contract
+
+Money-moving apps must call `evaluateMoneyMovementControls` or
+`assertMoneyMovementControls` before any provider mutation. The contract is
+read-only and fail-closed: it verifies the controls token, proves the token is
+bound to the exact amount/currency/counterparty/requestor tuple, requires a
+stable idempotency key, records counterparty verification and immutable policy
+snapshot references, confirms the emergency-freeze check, and requires a
+reconciliation reference.
+
+Live execution is additionally blocked unless the movement includes both an
+operator approval reference and sandbox evidence reference. After a provider
+success, the moving app must consume the authorization exactly once with
+`authorization.consume`; rejected, expired, consumed, frozen, mismatched, or
+replayed tokens are denial cases.
+
+First integration targets: `iapp-payments`, `iapp-treasury`, `iapp-wallets`,
+`iapp-billing`, and `iapp-accounting`.
+
 ## Surfaces (interface parity)
 
 CLI, MCP, and the `/v1` API expose the **same operations** over the same service
