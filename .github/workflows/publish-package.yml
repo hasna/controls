@@ -1,0 +1,61 @@
+name: Package CI
+on:
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: "Publish to npm (requires 'publish' environment approval)"
+        type: boolean
+        default: false
+  push:
+    branches: ["main"]
+    tags: ["v*"]
+  pull_request:
+permissions:
+  contents: read
+  id-token: write
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+          registry-url: "https://registry.npmjs.org"
+          scope: "@hasna"
+      - uses: oven-sh/setup-bun@v2
+        with: { bun-version: latest }
+      - run: bun install --frozen-lockfile
+      - run: bun run typecheck
+      - run: bun run test
+      - run: bun run build
+      - run: bunx @hasna/contracts vendor-kit --check
+      - run: bunx @hasna/contracts repo-conformance
+  publish:
+    needs: verify
+    if: github.event_name == 'workflow_dispatch' && inputs.publish == true
+    runs-on: ubuntu-latest
+    environment: publish
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v5
+        with: { node-version: "22", registry-url: "https://registry.npmjs.org", scope: "@hasna" }
+      - uses: oven-sh/setup-bun@v2
+        with: { bun-version: latest }
+      - run: bun install --frozen-lockfile
+      - run: bun run verify
+      - id: package
+        run: |
+          echo "name=$(bun -e 'console.log(require(\"./package.json\").name)')" >> "$GITHUB_OUTPUT"
+          echo "version=$(bun -e 'console.log(require(\"./package.json\").version)')" >> "$GITHUB_OUTPUT"
+      - id: published
+        env: { NODE_AUTH_TOKEN: "${{ secrets.NPM_TOKEN }}" }
+        run: |
+          if npm view "${{ steps.package.outputs.name }}@${{ steps.package.outputs.version }}" version >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+      - run: npm publish --access public
+        if: steps.published.outputs.exists != 'true'
+        env: { NODE_AUTH_TOKEN: "${{ secrets.NPM_TOKEN }}" }

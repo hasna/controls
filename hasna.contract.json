@@ -1,0 +1,20 @@
+{
+  "schema": "hasna.service_contract.v1",
+  "name": "controls",
+  "class": "cli-with-store",
+  "contractVersion": "v1",
+  "kitVersion": "0.4.1",
+  "description": "Spend-authorization/approval control plane over wallets+payments: per-entity/per-agent spend caps, counterparty allowlists, tiered human-approval thresholds, segregation-of-duties, emergency freeze, and an immutable hash-chained money audit. CLI + MCP + serve triad. Local mode uses SQLite at ~/.hasna/controls/controls.db; cloud mode (HASNA_CONTROLS_STORAGE_MODE=cloud) is PURE REMOTE per Amendment A1 with all reads/writes hitting the shared cloud Postgres.",
+  "bins": [
+    "controls",
+    "controls-mcp",
+    "controls-serve"
+  ],
+  "storage": {
+    "mode": "local",
+    "envPrefix": "HASNA_CONTROLS_",
+    "aliasEnvPrefix": "CONTROLS_",
+    "databaseUrlSecretRef": "hasna/oss/controls/database-url",
+    "sqlitePath": "~/.hasna/controls/controls.db"
+  }
+}

@@ -1,0 +1,53 @@
+{
+  "name": "@hasna/controls",
+  "version": "0.1.0",
+  "description": "Spend-authorization/approval control plane over wallets+payments: caps, allowlists, tiered approvals, segregation-of-duties, emergency freeze, immutable money audit. CLI + MCP + serve over a Hasna-contract store.",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "controls": "dist/cli/index.js",
+    "controls-mcp": "dist/mcp/index.js",
+    "controls-serve": "dist/server/index.js"
+  },
+  "exports": {
+    ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" }
+  },
+  "files": ["dist", "hasna.contract.json", "openapi.json", "docker-compose.yml", "LICENSE", "README.md"],
+  "scripts": {
+    "build": "bun build src/cli/index.tsx --outdir dist/cli --target bun --external ink --external react --external chalk --external @modelcontextprotocol/sdk --external hono && bun build src/mcp/index.ts --outdir dist/mcp --target bun --external @modelcontextprotocol/sdk && bun build src/server/index.ts --outdir dist/server --target bun --external hono && bun build src/index.ts --outdir dist --target bun && tsc --emitDeclarationOnly --outDir dist",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test",
+    "conformance": "bunx @hasna/contracts vendor-kit --check && bunx @hasna/contracts repo-conformance",
+    "verify": "bun run typecheck && bun run test && bun run build && bun run conformance",
+    "openapi:generate": "bun run src/cli/index.tsx openapi generate --out openapi.json --minify",
+    "openapi:check": "bun run src/cli/index.tsx openapi check --path openapi.json",
+    "smoke:package": "bun run src/release/package-smoke.ts",
+    "dev:cli": "bun run src/cli/index.tsx",
+    "dev:mcp": "bun run src/mcp/index.ts --http --port 8886",
+    "dev:serve": "bun run src/server/index.ts",
+    "postinstall": "node -e \"try{const os=require('os'),fs=require('fs'),p=require('path');const b=p.join(os.homedir(),'.hasna','controls');for(const d of ['','config','data','exports','backups','logs','tmp']) fs.mkdirSync(p.join(b,d),{recursive:true});}catch(e){}\""
+  },
+  "publishConfig": { "registry": "https://registry.npmjs.org", "access": "public" },
+  "repository": { "type": "git", "url": "git+https://github.com/hasna/controls.git" },
+  "homepage": "https://github.com/hasna/controls#readme",
+  "bugs": { "url": "https://github.com/hasna/controls/issues" },
+  "engines": { "bun": ">=1.1.0" },
+  "author": "Andrei Hasna <andrei@hasna.com>",
+  "license": "Apache-2.0",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.1",
+    "hono": "^4.6.0",
+    "commander": "^13.1.0",
+    "ink": "^5.2.0",
+    "react": "^18.3.1",
+    "chalk": "^5.4.1",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@hasna/contracts": "file:../../../hasna/opensource/open-contracts",
+    "@types/bun": "^1.2.4",
+    "@types/react": "^18.3.18",
+    "typescript": "^5.7.3"
+  }
+}

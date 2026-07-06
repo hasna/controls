@@ -1,0 +1,53 @@
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: controls
+      POSTGRES_USER: controls
+      POSTGRES_PASSWORD_FILE: /run/secrets/pg_password
+    secrets: [pg_password]
+    volumes: ["pgdata:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U controls"]
+      interval: 5s
+      retries: 10
+  serve:
+    image: oven/bun:1
+    # Invoke the serve bin directly. `bunx --package` selects the correct bin;
+    # a bare `bunx @hasna/controls controls-serve` would run the CLI and treat
+    # "controls-serve" as a bogus argument.
+    command: ["bunx", "--package", "@hasna/controls", "controls-serve"]
+    environment:
+      HASNA_CONTROLS_STORAGE_MODE: cloud
+      HASNA_CONTROLS_DATABASE_URL_FILE: /run/secrets/database_url
+      HASNA_CONTROLS_PORT: "3482"
+      HASNA_CONTROLS_BIND_HOST: "0.0.0.0"
+      HASNA_CONTROLS_CORS_ORIGINS: ${CORS_ORIGINS:-}
+    secrets: [database_url]
+    depends_on: { db: { condition: service_healthy } }
+    ports: ["3482:3482"]
+  mcp:
+    image: oven/bun:1
+    # --package selects the MCP bin; a bare `bunx @hasna/controls controls-mcp` would run
+    # the CLI and treat "controls-mcp" as a bogus argument. (BUILD-SPEC §6.4)
+    command: ["bunx", "--package", "@hasna/controls", "controls-mcp", "--http", "--port", "8886"]
+    environment:
+      HASNA_CONTROLS_STORAGE_MODE: cloud
+      HASNA_CONTROLS_DATABASE_URL_FILE: /run/secrets/database_url
+      MCP_HTTP: "1"
+      MCP_HTTP_PORT: "8886"
+      # Bind 0.0.0.0 so the published 8886 is reachable; the default loopback
+      # bind is invisible to Docker port forwarding. A non-loopback bind forces auth
+      # ON and is asserted fail-closed at startup (assertMcpServeSafety), satisfied
+      # here by wiring API_CREDENTIALS. Never publish this port without credentials.
+      HASNA_CONTROLS_MCP_BIND_HOST: "0.0.0.0"
+      HASNA_CONTROLS_API_CREDENTIALS: ${CONTROLS_API_CREDENTIALS:-}
+    secrets: [database_url]
+    depends_on: { db: { condition: service_healthy } }
+    ports: ["8886:8886"]
+secrets:
+  pg_password:
+    file: ./secrets/pg_password
+  database_url:
+    file: ./secrets/database_url   # postgres://controls:<pw>@db:5432/controls?sslmode=verify-full
+volumes: { pgdata: {} }
