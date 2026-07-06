@@ -29,8 +29,8 @@ jobs:
       - run: bun run typecheck
       - run: bun run test
       - run: bun run build
-      - run: bunx @hasna/contracts vendor-kit --check
-      - run: bunx @hasna/contracts repo-conformance
+      - run: bunx @hasna/contracts@0.4.1 vendor-kit --check
+      - run: bunx @hasna/contracts@0.4.1 repo-conformance
   publish:
     needs: verify
     if: github.event_name == 'workflow_dispatch' && inputs.publish == true
