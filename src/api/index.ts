@@ -1,5 +1,5 @@
 import { OPERATIONS, type OperationDef, type OperationField } from "../services/registry.js";
-import { ACTION_SCOPE } from "../server/auth.js";
+import { requiredScopeForAction } from "../server/auth.js";
 import { APP_VERSION } from "../version.js";
 
 /** OpenAPI 3.1 document generated from the shared operation registry (§6.3). */
@@ -52,7 +52,7 @@ function operationObject(def: OperationDef): Record<string, unknown> {
     operationId: def.op.replace(/\./g, "_"),
     summary: def.summary,
     tags: [def.cli.namespace],
-    "x-scope": ACTION_SCOPE[def.action],
+    "x-scope": requiredScopeForAction(def.action),
     parameters,
     responses: {
       "200": { description: "Success" },

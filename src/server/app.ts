@@ -5,7 +5,7 @@ import { statusForCode, toErrorEnvelope } from "../types/index.js";
 import { OPERATIONS, type OperationDef } from "../services/registry.js";
 import { listQueryResponse } from "./list-query.js";
 import {
-  ACTION_SCOPE,
+  requiredScopeForAction,
   authenticateToken,
   authorizeScopeAndEntity,
   bearerFromHeader,
@@ -148,7 +148,7 @@ export function createApp(): Hono {
         }
         const entityId = c.req.param("entity_id");
         if (principal) {
-          const authz = authorizeScopeAndEntity(principal, ACTION_SCOPE[def.action], entityId);
+          const authz = authorizeScopeAndEntity(principal, requiredScopeForAction(def.action), entityId);
           if (!authz.allowed) {
             return c.json({ code: authz.code, message: authz.message, suggestion: "Use a credential with the required scope + entity access." }, authz.status as never);
           }

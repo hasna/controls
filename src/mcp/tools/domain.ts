@@ -4,7 +4,7 @@ import { ok, fail } from "../compact.js";
 import { getDatabase } from "../../db/database.js";
 import { OPERATIONS, type OperationDef, type OperationField } from "../../services/registry.js";
 import { SYSTEM_AUTHORIZATION_CONTEXT, type AuthorizationContext } from "../../services/authorization.js";
-import { ACTION_SCOPE, authorizeScopeAndEntity, toAuthorizationContext, type ApiPrincipal } from "../../server/auth.js";
+import { requiredScopeForAction, authorizeScopeAndEntity, toAuthorizationContext, type ApiPrincipal } from "../../server/auth.js";
 import { PermissionDeniedError } from "../../types/index.js";
 
 function fieldSchema(field: OperationField): ZodTypeAny {
@@ -48,9 +48,10 @@ export function registerDomainTools(
       try {
         if (principal) {
           const entityId = typeof args["entity_id"] === "string" ? (args["entity_id"] as string) : undefined;
-          const authz = authorizeScopeAndEntity(principal, ACTION_SCOPE[def.action], entityId);
+          const requiredScope = requiredScopeForAction(def.action);
+          const authz = authorizeScopeAndEntity(principal, requiredScope, entityId);
           if (!authz.allowed) {
-            return fail(new PermissionDeniedError(ACTION_SCOPE[def.action], entityId));
+            return fail(new PermissionDeniedError(requiredScope, entityId));
           }
         }
         const db = getDatabase();

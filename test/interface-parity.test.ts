@@ -5,7 +5,8 @@ import { join } from "node:path";
 import { createApp } from "../src/server/app.js";
 import { getDatabase, closeDatabase } from "../src/db/database.js";
 import { OPERATIONS, operationManifest, type OperationDef } from "../src/services/registry.js";
-import { authenticateToken, type ApiPrincipal } from "../src/server/auth.js";
+import { ACTION_SCOPE, authenticateToken, type ApiPrincipal } from "../src/server/auth.js";
+import type { AuthorizationAction, AuthorizationRole } from "../src/services/authorization.js";
 import { seedEntity, type Seed } from "./helpers/db.js";
 import { captureTools, callTool } from "./helpers/mcp.js";
 
@@ -37,16 +38,33 @@ const PARITY_TOKEN = "tok-controls-parity";
 const PARITY_CRED_ID = "parity-caller";
 
 /**
- * Configure the parity credential scoped to EXACTLY `entityIds` (its tenant
- * boundary). `owner` role grants the full domain scope set so a single credential
- * can drive every op; entity scoping remains STRICT (deny-by-default) — this
- * credential can reach no entity outside `entityIds`, and is never SYSTEM/bypass.
- * Credentials are read fresh from env on every request, so re-scoping per op is
- * a plain env write.
+ * Least-privilege role that authorizes EXACTLY `action` at the service layer
+ * (roles gate the action dimension; scopes gate the transport surface). Mirrors
+ * fleet/access: the parity credential is a REAL, narrowly-scoped, NON-owner,
+ * NON-bypass credential — never the blanket `owner`/SYSTEM capability.
  */
-function configureScopedCredential(entityIds: string[]): void {
+const ROLE_FOR_ACTION: Record<AuthorizationAction, AuthorizationRole> = {
+  read: "auditor",
+  write: "requestor",
+  approve: "approver",
+  freeze: "security",
+  export: "auditor",
+  admin: "admin",
+};
+
+/**
+ * Configure the parity credential scoped to EXACTLY `entityIds` (its tenant
+ * boundary) with LEAST PRIVILEGE for `action`: it holds only `controls:read`
+ * plus that op's single required action scope, on the minimal role that
+ * authorizes the action — it can drive the op under test and nothing more. Entity
+ * scoping remains STRICT (deny-by-default): the credential reaches no entity
+ * outside `entityIds`, and is never SYSTEM/bypass. Credentials are read fresh
+ * from env on every request, so re-scoping per op is a plain env write.
+ */
+function configureScopedCredential(entityIds: string[], action: AuthorizationAction = "read"): void {
+  const scopes = Array.from(new Set(["controls:read", ACTION_SCOPE[action]]));
   process.env["HASNA_CONTROLS_API_CREDENTIALS"] = JSON.stringify([
-    { id: PARITY_CRED_ID, token: PARITY_TOKEN, type: "api_key", actor_id: PARITY_CRED_ID, roles: ["owner"], entity_ids: entityIds },
+    { id: PARITY_CRED_ID, token: PARITY_TOKEN, type: "api_key", actor_id: PARITY_CRED_ID, roles: [ROLE_FOR_ACTION[action]], scopes, entity_ids: entityIds },
   ]);
 }
 
@@ -203,8 +221,9 @@ describe("interface parity: identical harness + generated table", () => {
       const cliSeed = seedEntity(db, crypto.randomUUID());
 
       // Scope the real credential to exactly the entities the authenticated
-      // surfaces will touch. The CLI positive run stays the trusted SYSTEM surface.
-      configureScopedCredential([httpSeed.entity_id, mcpSeed.entity_id]);
+      // surfaces will touch, with LEAST PRIVILEGE for this op's action. The CLI
+      // positive run stays the trusted SYSTEM surface.
+      configureScopedCredential([httpSeed.entity_id, mcpSeed.entity_id], def.action);
 
       const http = await viaHttp(def, inputFor(def.op, httpSeed), PARITY_TOKEN);
       const mcp = await viaMcp(def, inputFor(def.op, mcpSeed), PARITY_TOKEN);
@@ -223,7 +242,7 @@ describe("interface parity: identical structured error envelopes", () => {
     const def = OPERATIONS.find((o) => o.op === "policy.get")!;
 
     // The credential must be scoped to `e` so denial is NOT_FOUND, not PERMISSION_DENIED.
-    configureScopedCredential([e]);
+    configureScopedCredential([e], def.action);
 
     const http = (await viaHttp(def, input, PARITY_TOKEN)) as Record<string, unknown>;
     const mcp = (await viaMcp(def, input, PARITY_TOKEN)) as Record<string, unknown>;
@@ -257,7 +276,7 @@ describe("interface parity: wrong-entity principal is denied on all three surfac
       const otherEntity = crypto.randomUUID(); // the ONLY entity the credential can reach
 
       // Credential is scoped to `otherEntity`, but every surface targets `targetSeed`.
-      configureScopedCredential([otherEntity]);
+      configureScopedCredential([otherEntity], def.action);
       const input = inputFor(def.op, targetSeed);
 
       const httpRes = await viaHttpResponse(def, input, PARITY_TOKEN);
